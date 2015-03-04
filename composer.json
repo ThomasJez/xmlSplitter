@@ -2,7 +2,8 @@
     "name": "xmlSplitter/xmlSplitter",
     "license": "MIT",
     "require": {
-        "symfony/console": "dev-master"
+        "symfony/console": "v2.5.6",
+        "symfony/filesystem": "v2.6.1"
     },
     "autoload": {
         "psr-0": {

@@ -3,6 +3,7 @@
 namespace XmlSplitter;
 
 use XMLReader;
+use Symfony\Component\Filesystem\Filesystem;
 
 class XmlSplitter {
 
@@ -12,9 +13,9 @@ class XmlSplitter {
     protected $reader;
 
     /**
-     * @var string
+     * @var array
      */
-    protected $file;
+    protected $files = array();
 
     /**
      * @var string
@@ -37,16 +38,30 @@ class XmlSplitter {
     protected $fileCount = 1;
 
     /**
-     * @param XMLReader $reader
-     * @param string    $file
+     * @var array
      */
-    public function __construct(XMLReader $reader, $file)
+    protected $tagFilter = array();
+
+    /**
+     * @var Filesystem
+     */
+    protected $filesystem;
+
+    /**
+     * @param XMLReader $reader
+     * @param string    $input
+     */
+    public function __construct(XMLReader $reader, $input)
     {
         $this->reader = $reader;
-        $this->setFile($file);
+        $this->setFilesystem(new Filesystem());
 
-        $filename =  basename($this->getFile(), '.xml');
-        $this->outputFolder = sys_get_temp_dir() . '/xml_splitter_output/' . $filename;
+        if (is_file($input)) {
+            $this->addFile($input);
+        } else if (is_dir($input)) {
+            $this->setFiles(glob(sprintf('%s/*.xml', $input)));
+        }
+
     }
 
     /**
@@ -55,14 +70,28 @@ class XmlSplitter {
      */
     public function split($tag)
     {
-        if (!file_exists($this->file)) {
-            throw new \Exception('The given XML File does not exist');
-        }
+        foreach ($this->getFiles() as $file) {
 
-        $this->checkAndCreateOutputFolder();
-        $this->reader->open($this->file);
-        while ($this->rFind($tag)) {
-            $this->writeOutput();
+            if (!file_exists($file)) {
+                throw new \Exception('The given XML File does not exist');
+            }
+
+            $this->reader->open($file);
+            while ($this->rFind($tag)) {
+                if ($this->hasTagFilter()) {
+                    $xml = $this->createSimpleXmlElement();
+                    // todo refactor
+                    $filterTag = key($this->getTagFilter());
+                    $filterValue = $this->getTagFilter($filterTag);
+                    $result = $xml->xpath(sprintf('//%s[text()=%s]', $filterTag, $filterValue));
+                    if (empty($result)) {
+                        continue;
+                    }
+                }
+
+                $outputFolder = $this->checkAndCreateOutputFolder($file);
+                $this->writeOutput($outputFolder);
+            }
         }
 
     }
@@ -70,11 +99,11 @@ class XmlSplitter {
     /**
      * write the output
      */
-    protected function writeOutput()
+    protected function writeOutput($outputFolder)
     {
         $xml = $this->createSimpleXmlElement();
 
-        $filename = $this->getOutputFolder() . '/' . $this->getOutputFileName($xml) . '.xml';
+        $filename = $outputFolder . '/' . $this->getOutputFileName($xml) . '.xml';
         file_put_contents($filename, $xml->saveXML());
     }
 
@@ -123,16 +152,21 @@ class XmlSplitter {
     /**
      * check if the OutputFolder exists and if not it will create it
      *
-     * @return XmlSplitter
+     * @var string $filename
+     * @return string
      */
-    protected function checkAndCreateOutputFolder()
+    protected function checkAndCreateOutputFolder($filename)
     {
-        if (!file_exists($this->getOutputFolder())) {
-            mkdir($this->getOutputFolder(), 0755, true);
+        $filename =  basename($filename, '.xml');
+        $outputFolder = $this->hasOutputFolder() ? $this->getOutputFolder() : $this->getDefaultOutputFolder();
+        $outputFolder .= '/' . $filename;
+
+        if (!$this->getFilesystem()->exists($outputFolder)) {
+            $this->getFilesystem()->mkdir($outputFolder, 0755);
         }
 
-
-        return $this;
+        var_dump($outputFolder);
+        return $outputFolder;
     }
 
     /**
@@ -141,7 +175,7 @@ class XmlSplitter {
      * @param string $tag
      * @return boolean
      */
-    protected  function rFind($tag) {
+    protected function rFind($tag) {
         $read_success = null;
         while (
             ($read_success = $this->reader->read()) &&
@@ -155,13 +189,13 @@ class XmlSplitter {
     }
 
     /**
-     * @param string $file
+     * @param array $files
      *
      * @return XmlSplitter
      */
-    public function setFile($file)
+    public function setFiles(Array $files)
     {
-        $this->file = $file;
+        $this->files = $files;
 
         return $this;
     }
@@ -169,9 +203,14 @@ class XmlSplitter {
     /**
      * @return string
      */
-    public function getFile()
+    public function getFiles()
     {
-        return $this->file;
+        return $this->files;
+    }
+
+    public function addFile($file)
+    {
+        $this->files[] = $file;
     }
 
     /**
@@ -192,6 +231,11 @@ class XmlSplitter {
     public function getOutputFolder()
     {
         return $this->outputFolder;
+    }
+
+    public function hasOutputFolder()
+    {
+        return !is_null($this->outputFolder);
     }
 
     /**
@@ -272,5 +316,64 @@ class XmlSplitter {
     public function getFileCount()
     {
         return $this->fileCount;
+    }
+
+    protected function getDefaultOutputFolder()
+    {
+        return $this->outputFolder = sys_get_temp_dir() . '/xml_splitter_output/';
+    }
+
+    /**
+     * @return array|string
+     */
+    public function getTagFilter($tag = null)
+    {
+        if (!is_null($tag) && isset($this->tagFilter[$tag])) {
+            return $this->tagFilter[$tag];
+        }
+
+        return $this->tagFilter;
+    }
+
+    /**
+     * @param array $tagFilter
+     *
+     * @return XmlSplitter
+     */
+    public function setTagFilter(Array $tagFilter)
+    {
+        $this->tagFilter = $tagFilter;
+
+        return $this;
+    }
+
+    public function addTagFilter($tag, $filter)
+    {
+        $this->tagFilter[$tag] = $filter;
+    }
+
+    public function hasTagFilter()
+    {
+        return !empty($this->tagFilter);
+    }
+
+    /**
+     * @return Filesystem
+     */
+    public function getFilesystem()
+    {
+        return $this->filesystem;
+    }
+
+    /**
+     * @param Filesystem $filesystem
+     *
+     * @return XmlSplitter
+     */
+    public function setFilesystem(Filesystem $filesystem)
+    {
+        $this->filesystem = $filesystem;
+
+        return $this;
     }
 }
