@@ -80,10 +80,13 @@ class XmlSplitter {
             while ($this->rFind($tag)) {
                 if ($this->hasTagFilter()) {
                     $xml = $this->createSimpleXmlElement();
+                    echo $xml->asXML();
                     // todo refactor
                     $filterTag = key($this->getTagFilter());
                     $filterValue = $this->getTagFilter($filterTag);
-                    $result = $xml->xpath(sprintf('//%s[text()=%s]', $filterTag, $filterValue));
+                    var_dump(sprintf('//%s[text()="%s"]', $filterTag, $filterValue));
+                    $result = $xml->xpath(sprintf('//%s[text()="%s"]', $filterTag, $filterValue));
+                    var_dump($result);
                     if (empty($result)) {
                         continue;
                     }
@@ -132,6 +135,7 @@ class XmlSplitter {
         $filename = (string) $this->getFileCount();
         if (!is_null($this->getNameByTag()) && is_null($this->getNameByAttribute())) {
             $tag = $this->getNameByTag();
+            var_dump($tag);echo $xml->asXML();
             $filename = (string) $xml->$tag;
         }
         else if (is_null($this->getNameByTag()) && !is_null($this->getNameByAttribute())) {
@@ -139,6 +143,7 @@ class XmlSplitter {
             $filename = (string) $xml->attributes()->$attribute;
         }
         else if (!is_null($this->getNameByTag()) && !is_null($this->getNameByAttribute())) {
+
             $tag = $this->getNameByTag();
             $attribute = $this->getNameByAttribute();
             $filename = (string) $xml->$tag->attributes()->$attribute;
@@ -146,6 +151,7 @@ class XmlSplitter {
 
         $this->increaseFileCount();
 
+        var_dump($filename);
         return $filename;
     }
 
@@ -165,7 +171,6 @@ class XmlSplitter {
             $this->getFilesystem()->mkdir($outputFolder, 0755);
         }
 
-        var_dump($outputFolder);
         return $outputFolder;
     }
 

@@ -33,6 +33,12 @@ class SplitCommand extends Command
                 'tag:value'
             )
             ->addOption(
+                'filter-by-attribute-value',
+                'filter2',
+                InputOption::VALUE_OPTIONAL,
+                'attribute:value'
+            )
+            ->addOption(
                 'name-by-tag-value',
                 'ntv',
                 InputOption::VALUE_OPTIONAL,
